@@ -3,6 +3,9 @@ import Mathlib
 /-
   This collects a wide range of `trivial' set-theoretic
   lemma's that should be provable by a generic setauto hammer
+
+  The proofs below serve no purpose other than to make sure there are no
+  false stamtements in the test suite
 -/
 
 variable {α : Type} (A B C D E : Set α)
