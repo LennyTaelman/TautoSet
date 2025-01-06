@@ -2,15 +2,14 @@ import Mathlib
 
 
 macro "setauto" : tactic => `(tactic|(
-  try simp only [Set.diff_eq, Set.disjoint_iff] at *;
+  try simp only [] at *;
   try simp only [
-    ←Set.univ_subset_iff,
-    ←Set.subset_empty_iff,
+    Set.diff_eq,
+    Set.disjoint_iff,
+    ←Set.univ_subset_iff, ←Set.subset_empty_iff,
     Set.compl_subset_iff_union,
-    Set.union_empty,
-    Set.inter_univ,
-    Set.compl_union,
-    Set.compl_inter,
+    Set.union_empty, Set.inter_univ,
+    Set.compl_union, Set.compl_inter,
     compl_compl,
   ] at *;
   try simp only [Set.ext_iff, Set.subset_def];
