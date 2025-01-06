@@ -45,7 +45,7 @@ macro "setauto" : tactic => `(tactic|(
 variable {α : Type} (A B C D E : Set α)
 
 
--- this still fails!
+-- this still fails, but it looks like we should be close!
 example (h : E = Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A = E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
 
 
