@@ -45,11 +45,7 @@ macro "setauto" : tactic => `(tactic|(
 ))
 
 
-
-
 variable {α : Type} (A B C D E : Set α)
-
-
 
 example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
 
