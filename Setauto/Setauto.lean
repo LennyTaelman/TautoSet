@@ -27,23 +27,37 @@ import Mathlib.Data.Set.Basic
 macro "setauto" : tactic => `(tactic|(
   -- unfold definitions of A \ B and Disjoint A B,
   -- and various simplifications involving univ, ∅, and complements
-  try simp_all only [
+  try simp only [
     Set.diff_eq, Set.disjoint_iff,
     ←Set.univ_subset_iff, ←Set.subset_empty_iff,
     Set.union_empty, Set.inter_univ,
     Set.compl_subset_iff_union, compl_compl,
-  ];
+  ] at *;
   -- now apply extensionality
   try simp_all only [
     Set.ext_iff, Set.subset_def,
     Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
-    Set.mem_inter_iff, and_imp
+    Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
+    iff_not_self,
   ];
   try tauto
 ))
 
 
 variable {α : Type} (A B C D E : Set α)
+
+
+-- this one gives a weird bug...
+example (h1 : A = Aᶜ) : B = ∅ := by setauto
+
+
+
+-- this one requires not_true_eq_false, false_and, and_false
+example (h1 : A ⊆ Aᶜ \ B) : A = ∅ := by setauto
+
+
+
+-- more boring
 
 example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
 
