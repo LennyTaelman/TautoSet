@@ -26,12 +26,13 @@ import Mathlib.Data.Set.Basic
 
 macro "setauto" : tactic => `(tactic|(
   -- unfold definitions of A \ B and Disjoint A B,
+  try simp only [Set.diff_eq, Set.disjoint_iff] at *
   -- and various simplifications involving univ, ∅, and complements
   try simp only [
-    Set.diff_eq, Set.disjoint_iff,
     ←Set.univ_subset_iff, ←Set.subset_empty_iff,
     Set.union_empty, Set.inter_univ,
     Set.compl_subset_iff_union, compl_compl,
+    -- Set.union_self,
   ] at *;
   -- now apply extensionality
   try simp_all only [
@@ -47,17 +48,72 @@ macro "setauto" : tactic => `(tactic|(
 variable {α : Type} (A B C D E : Set α)
 
 
--- this one gives a weird bug...
+/-
+  TODO: understand why the two examples below fail.
+  Notes:
+  1) they are resolved by strengthening the hypotheses to =
+  2) they can be resolved by adding intro x and specialize h x
+
+  priority: understand how I can loop over all hypotheses h and
+  try "specialize h x"
+-/
+
+example (h : B ⊆ A ∪ A) : B ⊆ A := by
+  -- unfold definitions of A \ B and Disjoint A B,
+  try simp only [Set.diff_eq, Set.disjoint_iff] at *
+  -- and various simplifications involving univ, ∅, and complements
+  try simp only [
+    ←Set.univ_subset_iff, ←Set.subset_empty_iff,
+    Set.union_empty, Set.inter_univ,
+    Set.compl_subset_iff_union, compl_compl,
+    -- Set.union_self,
+  ] at *;
+  -- now apply extensionality
+  try simp_all only [
+    Set.ext_iff, Set.subset_def,
+    Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
+    Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
+    iff_not_self,
+  ];
+  intro x
+  specialize h x
+  tauto
+
+
+example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by
+   -- unfold definitions of A \ B and Disjoint A B,
+  try simp only [Set.diff_eq, Set.disjoint_iff] at *
+  -- and various simplifications involving univ, ∅, and complements
+  try simp only [
+    ←Set.univ_subset_iff, ←Set.subset_empty_iff,
+    Set.union_empty, Set.inter_univ,
+    Set.compl_subset_iff_union, compl_compl,
+    -- Set.union_self,
+  ] at *;
+  -- now apply extensionality
+  try simp_all only [
+    Set.ext_iff, Set.subset_def,
+    Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
+    Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
+    iff_not_self,
+  ];
+  intro x
+  specialize h1 x
+  specialize h2 x
+  tauto
+
+
+
+-- requires iff_not_self
 example (h1 : A = Aᶜ) : B = ∅ := by setauto
-
-
 
 -- this one requires not_true_eq_false, false_and, and_false
 example (h1 : A ⊆ Aᶜ \ B) : A = ∅ := by setauto
 
+-- does not feel very hyghienic...
 
 
--- more boring
+
 
 example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
 
