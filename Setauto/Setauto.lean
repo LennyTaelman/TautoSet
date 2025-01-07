@@ -19,8 +19,6 @@ import Mathlib.Data.Set.Basic
   modify the proof state if not succesful?
 
   TODO: look at univ_subset_iff and subset_empty_iff; should these simp lemmas be reversed?
-
-  TODO: understand better the role of and_imp;
 -/
 
 
