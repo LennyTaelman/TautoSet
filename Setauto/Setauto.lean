@@ -1,6 +1,6 @@
 import Mathlib.Tactic.Tauto
 import Mathlib.Data.Set.Basic
-
+import Lean.Elab.SyntheticMVars
 
 /-
   This file defines a `setauto` tactic and runs a number of tests against it
@@ -21,8 +21,9 @@ import Mathlib.Data.Set.Basic
   TODO: look at univ_subset_iff and subset_empty_iff; should these simp lemmas be reversed?
 -/
 
-open Lean Elab.Tactic Parser.Tactic Lean.Meta MVarId Batteries.Tactic
+open Lean Elab.Tactic Parser.Tactic Lean.Meta MVarId Batteries.Tactic Meta
 -- open Qq
+-- open Language in
 
 def tauto_fun : TacticM Unit := do
   _ ← tryTactic (evalTactic (← `(tactic| tauto)))
@@ -36,7 +37,7 @@ elab_rules : tactic | `(tactic| tauto_tac) => do
 
 
 
-syntax (name := specialize2) "specialize2" term : tactic
+syntax (name := my_specialize) "my_specialize" term : tactic
 
 /-- Main tactic implementation that handles the specialization logic -/
 def evalSpecializeMain (e : Term) : TacticM Unit := withMainContext do
@@ -47,16 +48,47 @@ def evalSpecializeMain (e : Term) : TacticM Unit := withMainContext do
     let mvarId ← (← getMainGoal).assert localDecl.userName (← inferType e).headBeta e
     let (_, mvarId) ← mvarId.intro1P
     let mvarId ← mvarId.tryClear h.fvarId!
-    replaceMainGoal (mvarIds' ++ [mvarId])
+    replaceMainGoal ([mvarId])
   else
     throwError "'specialize' requires a term of the form `h x_1 .. x_n` where `h` appears in the local context"
 
 /-- Tactic elaborator that handles the syntax and calls the main implementation -/
-@[tactic specialize2] def evalSpecialize : Tactic := fun stx => do
+@[tactic my_specialize] def evalSpecialize : Tactic := fun stx => do
   match stx with
-  | `(tactic| specialize2 $e) => evalSpecializeMain e
+  | `(tactic| my_specialize $e) => evalSpecializeMain e
   | _ => throwError "unexpected syntax"
 
+
+
+syntax (name := my_intro) "my_intro"  : tactic
+
+@[tactic my_intro] def evalIntro : Tactic := fun _ => do
+    let fvarId ← liftMetaTacticAux fun mvarId => do
+      let (fvarId, mvarId) ← mvarId.intro `_
+      -- now loop over all hypotheses and try to specialize them with fvarId
+      let localDecls ← getLocalHyps
+      for hh in localDecls do
+
+        let localDecl ← hh.mvarId!.getDecl
+
+
+        -- specialize localDecl with fvarId
+        -- let mvarId ← (← getMainGoal).assert h.userName (← inferType h).headBeta h
+        pure ()
+      pure (fvarId, [mvarId])
+
+
+
+lemma intro_test : ∀ x : ℕ , x = x := by
+  my_intro
+  rfl
+  sorry
+
+lemma absurdity : 1 = 0  := by
+  have h : ∀ x : ℕ , x = x := by my_intro; sorry
+  my_specialize h 1
+
+  sorry
 
 macro "setauto" : tactic => `(tactic|(
   -- unfold definitions of A \ B and Disjoint A B,
@@ -116,7 +148,7 @@ example (h : B ⊆ A ∪ A) : B ⊆ A := by
     iff_not_self,
   ];
   intro x
-  specialize2 h x
+  my_specialize h x
   tauto
 
 
