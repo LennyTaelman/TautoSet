@@ -22,73 +22,50 @@ import Lean.Elab.SyntheticMVars
 -/
 
 open Lean Elab.Tactic Parser.Tactic Lean.Meta MVarId Batteries.Tactic Meta
--- open Qq
--- open Language in
-
-def tauto_fun : TacticM Unit := do
-  _ ← tryTactic (evalTactic (← `(tactic| tauto)))
-  pure ()
-
-syntax (name := tauto_tac) "tauto_tac" optConfig : tactic
-
-elab_rules : tactic | `(tactic| tauto_tac) => do
-  -- let _cfg ← elabConfig cfg
-  tauto_fun
 
 
+syntax (name := intro_and_specialize) "intro_and_specialize"  : tactic
 
-syntax (name := my_specialize) "my_specialize" term : tactic
-
-/-- Main tactic implementation that handles the specialization logic -/
-def evalSpecializeMain (e : Term) : TacticM Unit := withMainContext do
-  let (e, mvarIds') ← elabTermWithHoles e none `specialize2
-  let h := e.getAppFn
-  if h.isFVar then
-    let localDecl ← h.fvarId!.getDecl
-    let mvarId ← (← getMainGoal).assert localDecl.userName (← inferType e).headBeta e
-    let (_, mvarId) ← mvarId.intro1P
-    let mvarId ← mvarId.tryClear h.fvarId!
-    replaceMainGoal ([mvarId])
-  else
-    throwError "'specialize' requires a term of the form `h x_1 .. x_n` where `h` appears in the local context"
-
-/-- Tactic elaborator that handles the syntax and calls the main implementation -/
-@[tactic my_specialize] def evalSpecialize : Tactic := fun stx => do
-  match stx with
-  | `(tactic| my_specialize $e) => evalSpecializeMain e
-  | _ => throwError "unexpected syntax"
-
-
-
-syntax (name := my_intro) "my_intro"  : tactic
-
-@[tactic my_intro] def evalIntro : Tactic := fun _ => do
+@[tactic intro_and_specialize] def evalIntroSpec : Tactic := fun _ => do
+    -- do `intro' on the target
     let fvarId ← liftMetaTacticAux fun mvarId => do
-      let (fvarId, mvarId) ← mvarId.intro `_
-      -- now loop over all hypotheses and try to specialize them with fvarId
-      let localDecls ← getLocalHyps
-      for hh in localDecls do
-
-        let localDecl ← hh.mvarId!.getDecl
-
-
-        -- specialize localDecl with fvarId
-        -- let mvarId ← (← getMainGoal).assert h.userName (← inferType h).headBeta h
-        pure ()
+      let (fvarId, mvarId) ← mvarId.intro `random_name
       pure (fvarId, [mvarId])
+    -- now loop over all hypotheses and try to specialize them with fvarId
+    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+    ctx.forM fun decl: Lean.LocalDecl => do
+      let expr := decl.toExpr -- Find the expression of the declaration.
+      let n := decl.userName -- Find the name of the declaration.
+      -- need to apply e to `random_name; this may fail!
+      let e := Expr.app expr (Expr.fvar fvarId)
+      -- actually should do some typ checking here!
+      let t ← inferType e
+      dbg_trace f!"+ [my_intro] expr: {e} | type: {t}"
+      let mvarId ← (← getMainGoal).assert n (← inferType e).headBeta e
+      let (_, mvarId) ← mvarId.intro1P
+      let mvarId ← mvarId.tryClear (Lean.Expr.fvarId! e)
+      replaceMainGoal ([mvarId])
 
 
+    pure ()
 
-lemma intro_test : ∀ x : ℕ , x = x := by
-  my_intro
+
+    --   -- specialize localDecl with fvarId
+    --   -- let mvarId ← (← getMainGoal).assert h.userName (← inferType h).headBeta h
+    --   pure ()
+
+
+lemma intro_test (h2 : ∀ y : ℕ , y = y ): ∀ x : ℕ , x = x := by
+  intro_and_specialize
   rfl
-  sorry
+  -- this works!
 
-lemma absurdity : 1 = 0  := by
-  have h : ∀ x : ℕ , x = x := by my_intro; sorry
-  my_specialize h 1
+-- this fails, need to typecheck before specializing
 
-  sorry
+-- lemma intro_test (h1 : 1 = 0) (h2 : ∀ y : ℕ , y = y ): ∀ x : ℕ , x = x := by
+--   my_intro
+--   rfl
+
 
 macro "setauto" : tactic => `(tactic|(
   -- unfold definitions of A \ B and Disjoint A B,
@@ -107,7 +84,7 @@ macro "setauto" : tactic => `(tactic|(
     Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
     iff_not_self,
   ];
-  try intro x;
+  try intro_and_specialize;
   -- todo: try specialize h x for all hypotheses h
   -- specialize all hypotheses with x
 
@@ -130,27 +107,7 @@ variable {α : Type} (A B C D E : Set α)
   try "specialize h x"
 -/
 
-example (h : B ⊆ A ∪ A) : B ⊆ A := by
-  -- unfold definitions of A \ B and Disjoint A B,
-  try simp only [Set.diff_eq, Set.disjoint_iff] at *
-  -- and various simplifications involving univ, ∅, and complements
-  try simp only [
-    ←Set.univ_subset_iff, ←Set.subset_empty_iff,
-    Set.union_empty, Set.inter_univ,
-    Set.compl_subset_iff_union, compl_compl,
-    -- Set.union_self,
-  ] at *;
-  -- now apply extensionality
-  try simp_all only [
-    Set.ext_iff, Set.subset_def,
-    Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
-    Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
-    iff_not_self,
-  ];
-  intro x
-  my_specialize h x
-  tauto
-
+example (h : B ⊆ A ∪ A) : B ⊆ A := by sorry
 
 example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by
    -- unfold definitions of A \ B and Disjoint A B,
@@ -178,7 +135,11 @@ example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by
 
 
 
-example (h : B ⊆ A ∪ A) : B ⊆ A := by setauto
+-- example (h : B ⊆ A ∪ A) : B ⊆ A := by
+--   setauto
+--   my_intro
+--   tauto
+--   sorry
 
 -- requires iff_not_self
 example (h1 : A = Aᶜ) : B = ∅ := by setauto
