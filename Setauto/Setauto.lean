@@ -23,48 +23,83 @@ import Lean.Elab.SyntheticMVars
 
 open Lean Elab.Tactic Parser.Tactic Lean.Meta MVarId Batteries.Tactic Meta
 
+#check evalSpecialize
+
+
+syntax (name := specialize_all) "specialize_all " term : tactic
+
+def evalSpecialize : Tactic := fun stx => withMainContext do
+  match stx with
+  | `(tactic| specialize_all $x:term) =>
+    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+    ctx.forM fun decl: Lean.LocalDecl => do
+      let s ← saveState
+      try
+        let n := decl.toExpr
+        -- produce syntax for 'n applied to x'
+        let e := Syntax.mkApp n.toSyntax #[x]
+      catch _ =>
+        restoreState s
+        let (e, mvarIds') ← elabTermWithHoles e none `specialize (allowNaturalHoles := true)
+        -- let h := e.getAppFn
+        -- if h.isFVar then
+        --   let localDecl ← h.fvarId!.getDecl
+        --   let mvarId ← (← getMainGoal).assert localDecl.userName (← inferType e).headBeta e
+        --   let (_, mvarId) ← mvarId.intro1P
+        --   let mvarId ← mvarId.tryClear h.fvarId!
+        --   replaceMainGoal (mvarIds' ++ [mvarId])
+        -- else
+        --   throwError "'specialize' requires a term of the form `h x_1 .. x_n` where `h` appears in the local context"
+  | _ => throwError "unexpected input"
+
+
+
 
 syntax (name := intro_and_specialize) "intro_and_specialize"  : tactic
 
 @[tactic intro_and_specialize] def evalIntroSpec : Tactic := fun _ => do
     -- do `intro' on the target
     let fvarId ← liftMetaTacticAux fun mvarId => do
-      let (fvarId, mvarId) ← mvarId.intro `random_name
+      let (fvarId, mvarId) ← mvarId.intro `x
       pure (fvarId, [mvarId])
     -- now loop over all hypotheses and try to specialize them with fvarId
     let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
     ctx.forM fun decl: Lean.LocalDecl => do
-      let expr := decl.toExpr -- Find the expression of the declaration.
-      let n := decl.userName -- Find the name of the declaration.
-      -- need to apply e to `random_name; this may fail!
-      let e := Expr.app expr (Expr.fvar fvarId)
-      -- actually should do some typ checking here!
-      let t ← inferType e
-      dbg_trace f!"+ [my_intro] expr: {e} | type: {t}"
-      let mvarId ← (← getMainGoal).assert n (← inferType e).headBeta e
-      let (_, mvarId) ← mvarId.intro1P
-      let mvarId ← mvarId.tryClear (Lean.Expr.fvarId! e)
-      replaceMainGoal ([mvarId])
-
-
+      let s ← saveState
+      try
+        let expr := decl.toExpr -- Find the expression of the declaration.
+        -- need to apply e to `random_name; this may fail!
+        let e := Expr.app expr (Expr.fvar fvarId)
+        -- dbg_trace f!"+ [my_intro] expr: {e}"
+        let h := e.getAppFn
+        if h.isFVar then
+          let localDecl ← h.fvarId!.getDecl
+          -- dbg_trace f!"+ [my_intro] h: {localDecl.userName}"
+          let t ← inferType e
+          -- dbg_trace f!"+ [my_intro] type: {t}"
+          let mvarId ← (← getMainGoal).assert localDecl.userName
+            t.headBeta e
+          -- dbg_trace f!"+ [my_intro] passed assert"
+          let (_, mvarId) ← mvarId.intro1P
+          let mvarId ← mvarId.tryClear h.fvarId!
+          replaceMainGoal ([mvarId])
+      catch _ =>
+        restoreState s
     pure ()
 
 
-    --   -- specialize localDecl with fvarId
-    --   -- let mvarId ← (← getMainGoal).assert h.userName (← inferType h).headBeta h
-    --   pure ()
 
 
 lemma intro_test (h2 : ∀ y : ℕ , y = y ): ∀ x : ℕ , x = x := by
   intro_and_specialize
-  rfl
-  -- this works!
+  exact h2
+  -- weird side effect: intro_test introduced in local context!
 
--- this fails, need to typecheck before specializing
+-- this fails, need to typecheck before specializing; or catch the error
 
--- lemma intro_test (h1 : 1 = 0) (h2 : ∀ y : ℕ , y = y ): ∀ x : ℕ , x = x := by
---   my_intro
---   rfl
+lemma intro_test2 (h1 : 1 = 0) (h2 : ∀ y : ℕ , y = y ): ∀ x : ℕ , x = x := by
+  intro_and_specialize
+  exact h2
 
 
 macro "setauto" : tactic => `(tactic|(
@@ -85,10 +120,6 @@ macro "setauto" : tactic => `(tactic|(
     iff_not_self,
   ];
   try intro_and_specialize;
-  -- todo: try specialize h x for all hypotheses h
-  -- specialize all hypotheses with x
-
-
   try tauto
 ))
 
@@ -107,12 +138,7 @@ variable {α : Type} (A B C D E : Set α)
   try "specialize h x"
 -/
 
-example (h : B ⊆ A ∪ A) : B ⊆ A := by sorry
-
-example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by
-   -- unfold definitions of A \ B and Disjoint A B,
-  try simp only [Set.diff_eq, Set.disjoint_iff] at *
-  -- and various simplifications involving univ, ∅, and complements
+example (h : B ⊆ A ∪ A) : B ⊆ A := by
   try simp only [
     ←Set.univ_subset_iff, ←Set.subset_empty_iff,
     Set.union_empty, Set.inter_univ,
@@ -126,106 +152,113 @@ example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by
     Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
     iff_not_self,
   ];
-  intro x
-  specialize h1 x
-  specialize h2 x
+  intro_and_specialize
+  try simp_all only [
+    Set.ext_iff, Set.subset_def,
+    Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
+    Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
+    iff_not_self,
+  ];
+  -- tauto gives error fail to prove termination
+  clear _example
+  -- tauto
+
+
+
+example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by
+  intro_and_specialize
+  clear _example
   tauto
+  -- tauto gives error fail to prove termination
+  simp_all
+  -- tauto
+  sorry
 
 
 
 
 
--- example (h : B ⊆ A ∪ A) : B ⊆ A := by
---   setauto
---   my_intro
---   tauto
---   sorry
+-- example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by setauto
 
--- requires iff_not_self
-example (h1 : A = Aᶜ) : B = ∅ := by setauto
+-- example (h1 : A = Aᶜ) : B = ∅ := by setauto
 
--- this one requires not_true_eq_false, false_and, and_false
-example (h1 : A ⊆ Aᶜ \ B) : A = ∅ := by setauto
-
--- does not feel very hyghienic...
+-- example (h1 : A ⊆ Aᶜ \ B) : A = ∅ := by setauto
 
 
+-- example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
 
+-- example (h : E = Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A = E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
 
-example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
+-- example (h : E ⊇ Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A ⊆  E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
 
-example (h : E = Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A = E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
+-- example (h1 : A = B) : A = B := by setauto
 
-example (h : E ⊇ Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A ⊆  E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
+-- example (h1 : A = B) (h2 : B ⊆ C): A ⊆ C := by setauto
 
-example (h1 : A = B) : A = B := by setauto
+-- example (h1 : A ⊆ B \ C) : A ⊆ B := by setauto
 
-example (h1 : A = B) (h2 : B ⊆ C): A ⊆ C := by setauto
+-- example (h1 : A ∩ B = Set.univ) : A = Set.univ := by setauto
 
-example (h1 : A ⊆ B \ C) : A ⊆ B := by setauto
+-- example (h1 : A ∪ B = ∅) : A = ∅ := by setauto
 
-example (h1 : A ∩ B = Set.univ) : A = Set.univ := by setauto
+-- example (h1 : Aᶜ ⊆ ∅) : A = Set.univ := by setauto
 
-example (h1 : A ∪ B = ∅) : A = ∅ := by setauto
+-- example (h1: Set.univ ⊆ Aᶜ) : A = ∅ := by setauto
 
-example (h1 : Aᶜ ⊆ ∅) : A = Set.univ := by setauto
+-- example : A ∩ ∅ = ∅ := by setauto
 
-example (h1: Set.univ ⊆ Aᶜ) : A = ∅ := by setauto
+-- example : A ∪ Set.univ = Set.univ := by setauto
 
-example : A ∩ ∅ = ∅ := by setauto
+-- example : A ⊆ Set.univ := by setauto
 
-example : A ∪ Set.univ = Set.univ := by setauto
+-- example (h1 : A ⊆ B) (h2: B ⊆ A) : A = B := by setauto
 
-example : A ⊆ Set.univ := by setauto
+-- example : A ∪ (B ∩ C) = (A ∪ B) ∩ (A ∪ C) := by setauto
 
-example (h1 : A ⊆ B) (h2: B ⊆ A) : A = B := by setauto
+-- example : A ∩ (B ∪ C) = (A ∩ B) ∪ (A ∩ C) := by setauto
 
-example : A ∪ (B ∩ C) = (A ∪ B) ∩ (A ∪ C) := by setauto
+-- example : A ⊆ (A ∪ B) ∪ C := by setauto
 
-example : A ∩ (B ∪ C) = (A ∩ B) ∪ (A ∩ C) := by setauto
+-- example : A ∩ (B ∪ C) ⊆ (A ∩ B) ∪ (A ∩ C) := by setauto
 
-example : A ⊆ (A ∪ B) ∪ C := by setauto
+-- example : A ∩ B ⊆ A := by setauto
 
-example : A ∩ (B ∪ C) ⊆ (A ∩ B) ∪ (A ∩ C) := by setauto
+-- example : A ⊆ A ∪ B := by setauto
 
-example : A ∩ B ⊆ A := by setauto
+-- example (h1 : Set.univ ⊆ A) : A = Set.univ := by setauto
 
-example : A ⊆ A ∪ B := by setauto
+-- example (h1 : B ⊆ A) (h2 : Set.univ ⊆ B): Set.univ = A := by setauto
 
-example (h1 : Set.univ ⊆ A) : A = Set.univ := by setauto
+-- example (h1 : A ⊆ B) (h2 : C ⊆ D) : C \ B ⊆ D \ A := by setauto
 
-example (h1 : B ⊆ A) (h2 : Set.univ ⊆ B): Set.univ = A := by setauto
+-- example (h : A ⊆ B ∧ C ⊆ D) : C \ B ⊆ D \ A := by setauto
 
-example (h1 : A ⊆ B) (h2 : C ⊆ D) : C \ B ⊆ D \ A := by setauto
+-- example (h1 : Disjoint A B) (h2 : C ⊆ A) : Disjoint C (B \ D) := by setauto
 
-example (h : A ⊆ B ∧ C ⊆ D) : C \ B ⊆ D \ A := by setauto
+-- example : Aᶜᶜᶜ = Aᶜ := by setauto
 
-example (h1 : Disjoint A B) (h2 : C ⊆ A) : Disjoint C (B \ D) := by setauto
+-- example : A ⊆ Set.univ := by setauto
 
-example : Aᶜᶜᶜ = Aᶜ := by setauto
+-- example : ∅ ⊆ A := by setauto
 
-example : A ⊆ Set.univ := by setauto
+-- example (hA : A ⊆ ∅) : A = ∅ := by setauto
 
-example : ∅ ⊆ A := by setauto
+-- example : Aᶜᶜ = A := by setauto
 
-example (hA : A ⊆ ∅) : A = ∅ := by setauto
+-- example (hAB : A ⊆ B) (hBC : B ⊆ C) : A ⊆ C := by setauto
 
-example : Aᶜᶜ = A := by setauto
+-- example : (Aᶜ ∪ B ∪ C)ᶜ = Cᶜ ∩ Bᶜ ∩ A := by setauto
 
-example (hAB : A ⊆ B) (hBC : B ⊆ C) : A ⊆ C := by setauto
+-- example : (Aᶜ ∩ B ∩ Cᶜᶜ)ᶜᶜᶜᶜᶜ = Cᶜ ∪ Bᶜ ∪ ∅ ∪ A ∪ ∅ := by setauto
 
-example : (Aᶜ ∪ B ∪ C)ᶜ = Cᶜ ∩ Bᶜ ∩ A := by setauto
+-- example : D ∩ (B ∪ Cᶜ) ∩ A = (Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
 
-example : (Aᶜ ∩ B ∩ Cᶜᶜ)ᶜᶜᶜᶜᶜ = Cᶜ ∪ Bᶜ ∪ ∅ ∪ A ∪ ∅ := by setauto
+-- example (h1 : A ⊆ B) (h2 : B ⊆ C) (h3 : C ⊆ D) (h4 : D = E) (h5 : E ⊆ A) :
+--   (Aᶜ ∩ B ∪ (C ∩ Bᶜ)ᶜ ∩ (Eᶜ ∪ A))ᶜ ∩ (B ∪ Eᶜᶜ)ᶜ =
+--   (Dᶜ ∩ C ∪ (B ∩ Aᶜ)ᶜ ∩ (Eᶜ ∪ E))ᶜ ∩ (D ∪ Cᶜᶜ)ᶜ := by setauto
 
-example : D ∩ (B ∪ Cᶜ) ∩ A = (Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
+-- example (h1 : Set.univ ⊆ A) (h2 : A ⊆ ∅) :
+--   (Aᶜ ∩ B ∩ Cᶜᶜ)ᶜᶜᶜ = (Aᶜ ∩ B ∪ (C ∩ Dᶜ)ᶜ ∩ (Eᶜ ∪ A))ᶜ ∩ (B ∪ Eᶜᶜ)ᶜ := by setauto
 
-example (h1 : A ⊆ B) (h2 : B ⊆ C) (h3 : C ⊆ D) (h4 : D = E) (h5 : E ⊆ A) :
-  (Aᶜ ∩ B ∪ (C ∩ Bᶜ)ᶜ ∩ (Eᶜ ∪ A))ᶜ ∩ (B ∪ Eᶜᶜ)ᶜ =
-  (Dᶜ ∩ C ∪ (B ∩ Aᶜ)ᶜ ∩ (Eᶜ ∪ E))ᶜ ∩ (D ∪ Cᶜᶜ)ᶜ := by setauto
-
-example (h1 : Set.univ ⊆ A) (h2 : A ⊆ ∅) :
-  (Aᶜ ∩ B ∩ Cᶜᶜ)ᶜᶜᶜ = (Aᶜ ∩ B ∪ (C ∩ Dᶜ)ᶜ ∩ (Eᶜ ∪ A))ᶜ ∩ (B ∪ Eᶜᶜ)ᶜ := by setauto
-
-example (h1 : A ⊆ B) (h2 : A ⊆ C) (h3 : B ⊆ D) (h4 : C ⊆ D) (h5 : A = D) :
-  Bᶜ = Cᶜ := by setauto
+-- example (h1 : A ⊆ B) (h2 : A ⊆ C) (h3 : B ⊆ D) (h4 : C ⊆ D) (h5 : A = D) :
+--   Bᶜ = Cᶜ := by setauto
