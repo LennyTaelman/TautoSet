@@ -21,7 +21,41 @@ import Mathlib.Data.Set.Basic
   TODO: look at univ_subset_iff and subset_empty_iff; should these simp lemmas be reversed?
 -/
 
+open Lean Elab.Tactic Parser.Tactic Lean.Meta MVarId Batteries.Tactic
+-- open Qq
 
+def tauto_fun : TacticM Unit := do
+  _ ← tryTactic (evalTactic (← `(tactic| tauto)))
+  pure ()
+
+syntax (name := tauto_tac) "tauto_tac" optConfig : tactic
+
+elab_rules : tactic | `(tactic| tauto_tac) => do
+  -- let _cfg ← elabConfig cfg
+  tauto_fun
+
+
+
+syntax (name := specialize2) "specialize2" term : tactic
+
+/-- Main tactic implementation that handles the specialization logic -/
+def evalSpecializeMain (e : Term) : TacticM Unit := withMainContext do
+  let (e, mvarIds') ← elabTermWithHoles e none `specialize2
+  let h := e.getAppFn
+  if h.isFVar then
+    let localDecl ← h.fvarId!.getDecl
+    let mvarId ← (← getMainGoal).assert localDecl.userName (← inferType e).headBeta e
+    let (_, mvarId) ← mvarId.intro1P
+    let mvarId ← mvarId.tryClear h.fvarId!
+    replaceMainGoal (mvarIds' ++ [mvarId])
+  else
+    throwError "'specialize' requires a term of the form `h x_1 .. x_n` where `h` appears in the local context"
+
+/-- Tactic elaborator that handles the syntax and calls the main implementation -/
+@[tactic specialize2] def evalSpecialize : Tactic := fun stx => do
+  match stx with
+  | `(tactic| specialize2 $e) => evalSpecializeMain e
+  | _ => throwError "unexpected syntax"
 
 
 macro "setauto" : tactic => `(tactic|(
@@ -41,8 +75,14 @@ macro "setauto" : tactic => `(tactic|(
     Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
     iff_not_self,
   ];
+  try intro x;
+  -- todo: try specialize h x for all hypotheses h
+  -- specialize all hypotheses with x
+
+
   try tauto
 ))
+
 
 
 variable {α : Type} (A B C D E : Set α)
@@ -76,7 +116,7 @@ example (h : B ⊆ A ∪ A) : B ⊆ A := by
     iff_not_self,
   ];
   intro x
-  specialize h x
+  specialize2 h x
   tauto
 
 
@@ -103,6 +143,10 @@ example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by
   tauto
 
 
+
+
+
+example (h : B ⊆ A ∪ A) : B ⊆ A := by setauto
 
 -- requires iff_not_self
 example (h1 : A = Aᶜ) : B = ∅ := by setauto
