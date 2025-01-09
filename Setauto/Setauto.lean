@@ -74,9 +74,9 @@ example (h : B ⊆ A ∪ A) : 1=0 := by
 -- setauto -- tauto failed to solve some goals
   sorry
 
--- finishes early, tauto returns 'no goals to be solved'
+-- finishes early (on simp)
 example (h : B ⊆ A ∪ A) : 1=1 := by
-  setauto -- simp closed the goal, tauto raises error
+  setauto
 
 
 
