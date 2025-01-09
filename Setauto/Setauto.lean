@@ -47,23 +47,15 @@ example (h1 : ∀ x : ℕ , x = x) (h2 : 1 + 2 = 2)
   sorry
 
 
-macro "setauto" : tactic => `(tactic|(
-  · (
-  simp_all only [
-    Set.diff_eq, Set.disjoint_iff,
-    Set.ext_iff, Set.subset_def,
-    Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
-    Set.mem_inter_iff,
-  ];
-  try intro x
-  try specialize_all x
-  <;> tauto)
-))
-
-
-
--- TODO: make setauto a finishing tactic; either closes goal, or throws error
--- TODO: check what happens in the presence of multiple goals
+macro "setauto" : tactic => `(tactic|
+  · simp_all only [
+      Set.diff_eq, Set.disjoint_iff, Set.ext_iff, Set.subset_def,
+      Set.mem_union, Set.mem_compl_iff, Set.mem_inter_iff
+    ]
+    try intro x
+    try specialize_all x
+    <;> tauto
+)
 
 
 variable {α : Type} (A B C D E : Set α)
@@ -92,7 +84,11 @@ example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by setauto
 
 example (h1 : A = Aᶜ) : B = ∅ := by setauto
 
+example (h1 : A = Aᶜ) : B = C := by setauto
+
 example (h1 : A ⊆ Aᶜ \ B) : A = ∅ := by setauto
+
+example (h : Set.univ ⊆ ((A ∪ B) ∩ C) ∩ ((Aᶜ ∩ Bᶜ) ∪ Cᶜ)) : D \ B ⊆ E ∩ Aᶜ := by setauto
 
 example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
 
