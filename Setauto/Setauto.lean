@@ -1,181 +1,84 @@
 import Mathlib.Tactic.Tauto
 import Mathlib.Data.Set.Basic
-import Lean.Elab.SyntheticMVars
 
 /-
   This file defines a `setauto` tactic and runs a number of tests against it
 
-  The hope is to prove any tautology involving hypotheses and goals of the form X ⊆ Y or X = Y,
-  where X, Y are expressions built using ∪, ∩, \, and ᶜ from finitely many variables of type Set α.
-  We also allow expressions of the form Disjoint A B.
+  The hope is to prove any tautology involving hypotheses and goals of the form
+  X ⊆ Y or X = Y, where X, Y are expressions built using ∪, ∩, \, and ᶜ from
+  finitely many variables of type Set α. It also unfolds expressions of the form
+  Disjoint A B.
 
   See the test examples below.
-
-  Based on suggestions by Martin Dvořák and Damiano Testa
 -/
+
+open Lean Elab.Tactic
 
 /-
-  TODO: make this tactic fail if it fails to prove the goal? If not, then it probably should not
-  modify the proof state if not succesful?
+  The `specialize_all` tactic is a simple tactic that loops over
+  all hypotheses in the local context.
 
-  TODO: look at univ_subset_iff and subset_empty_iff; should these simp lemmas be reversed?
+  Usage: `specialize_all x`, where `x` is a term. Equivalent to running
+  `specialize h x` for all hypotheses h where this tactic succeeds.
 -/
 
-open Lean Elab.Tactic Parser.Tactic Lean.Meta MVarId Meta
 
-#check evalSpecialize
-
-
--- the my_specialize tactic should attempt to specialize
--- and do nothing if things don't typecheck
-
-syntax (name := my_specialize) "my_specialize" term term : tactic
-
-@[tactic my_specialize] def evalMySpecialize : Tactic :=
-    fun stx => withMainContext do
-  match stx with
-  | `(tactic| specialize $h:term $x:term) =>
-    dbg_trace f!"+ [my_specialize] h: {h}, x: {x}"
-    let h_expr ← elabTerm h none
-    let x_expr ← elabTerm x none
-    -- now apply h to x
-    let hx_expr := (mkApp h_expr x_expr)
-    dbg_trace f!"+ [my_specialize] hx_expr: {hx_expr}"
-    `(specialize $hx_expr)
-
-
-
-  | _ => throwError "unexpected input"
-
-
-example (h : ∀ x : ℕ , x = x) : ∀ y : ℕ , 1 = 0 := by
-  intro y
-  specialize h y
-
-
-
-
-
-  sorry
-
-syntax (name := specialize_all) "specialize_all " term : tactic
-
-#check TSyntax `term
+syntax (name := specialize_all) "specialize_all" term : tactic
 
 @[tactic specialize_all] def evalSpecializeAll : Tactic :=
     fun stx => withMainContext do
   match stx with
   | `(tactic| specialize_all $x:term) =>
-    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
-    ctx.forM fun decl: Lean.LocalDecl => do
+    -- loop over all hypotheses h
+    let ctx ← Lean.MonadLCtx.getLCtx
+    ctx.forM fun h: Lean.LocalDecl => do
       let s ← saveState
       try
-        let n := decl.toExpr
-        -- produce syntax for 'n applied to x'
-        let e := Syntax.mkApp n.toSyntax #[x]
-        let (e, mvarIds') ← elabTermWithHoles e none `specialize (allowNaturalHoles := true)
+        evalTactic (← `(tactic|specialize $(mkIdent h.userName) $x))
       catch _ =>
         restoreState s
-        -- let h := e.getAppFn
-        -- if h.isFVar then
-        --   let localDecl ← h.fvarId!.getDecl
-        --   let mvarId ← (← getMainGoal).assert localDecl.userName (← inferType e).headBeta e
-        --   let (_, mvarId) ← mvarId.intro1P
-        --   let mvarId ← mvarId.tryClear h.fvarId!
-        --   replaceMainGoal (mvarIds' ++ [mvarId])
-        -- else
-        --   throwError "'specialize' requires a term of the form `h x_1 .. x_n` where `h` appears in the local context"
   | _ => throwError "unexpected input"
 
 
-
-
-syntax (name := intro_and_specialize) "intro_and_specialize"  : tactic
-
-@[tactic intro_and_specialize] def evalIntroSpec : Tactic := fun _ => do
-    -- do `intro' on the target
-    let fvarId ← liftMetaTacticAux fun mvarId => do
-      let (fvarId, mvarId) ← mvarId.intro `x
-      pure (fvarId, [mvarId])
-    -- now loop over all hypotheses and try to specialize them with fvarId
-    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
-    ctx.forM fun decl: Lean.LocalDecl => do
-      let s ← saveState
-      try
-        let expr := decl.toExpr -- Find the expression of the declaration.
-        -- need to apply e to `random_name; this may fail!
-        let e := Expr.app expr (Expr.fvar fvarId)
-        -- dbg_trace f!"+ [my_intro] expr: {e}"
-        let h := e.getAppFn
-        if h.isFVar then
-          let localDecl ← h.fvarId!.getDecl
-          -- dbg_trace f!"+ [my_intro] h: {localDecl.userName}"
-          let t ← inferType e
-          -- dbg_trace f!"+ [my_intro] type: {t}"
-          let mvarId ← (← getMainGoal).assert localDecl.userName
-            t.headBeta e
-          -- dbg_trace f!"+ [my_intro] passed assert"
-          let (_, mvarId) ← mvarId.intro1P
-          let mvarId ← mvarId.tryClear h.fvarId!
-          replaceMainGoal ([mvarId])
-      catch _ =>
-        restoreState s
-    pure ()
-
-
-
-
-lemma intro_test (h2 : ∀ y : ℕ , y = y ): ∀ x : ℕ , x = x := by
-  intro_and_specialize
-  exact h2
-  -- weird side effect: intro_test introduced in local context!
-
--- this fails, need to typecheck before specializing; or catch the error
-
-lemma intro_test2 (h1 : 1 = 0) (h2 : ∀ y : ℕ , y = y ): ∀ x : ℕ , x = x := by
-  intro_and_specialize
-  exact h2
-
-
 macro "setauto" : tactic => `(tactic|(
-  -- unfold definitions of A \ B and Disjoint A B,
-  try simp only [Set.diff_eq, Set.disjoint_iff] at *
-  -- and various simplifications involving univ, ∅, and complements
-  try simp only [
-    ←Set.univ_subset_iff, ←Set.subset_empty_iff,
-    Set.union_empty, Set.inter_univ,
-    Set.compl_subset_iff_union, compl_compl,
-    -- Set.union_self,
-  ] at *;
-  -- now apply extensionality
   try simp_all only [
+    Set.diff_eq, Set.disjoint_iff,
     Set.ext_iff, Set.subset_def,
     Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
-    Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
-    iff_not_self,
+    Set.mem_inter_iff,
   ];
-  -- here should add intro x and loop over all hypotheses to try to specialize them!
-  try tauto
+  try intro x
+  try specialize_all x
+  tauto
 ))
 
+
+
+-- TODO: make setauto a finishing tactic; either closes goal, or throws error
+-- TODO: check what happens in the presence of multiple goals
 
 
 variable {α : Type} (A B C D E : Set α)
 
 
-/-
-  TODO: understand why the two examples below fail.
-  Notes:
-  1) they are resolved by strengthening the hypotheses to =
-  2) they can be resolved by adding intro x and specialize h x
+-- nonfinishing examples
 
-  priority: understand how I can loop over all hypotheses h and
-  try "specialize h x"
--/
+-- example (h : B ⊆ A ∪ A) : 1=0 := by
+--   setauto -- tauto failed to prove some goals
 
-example (h : B ⊆ A ∪ A) : B ⊆ A := by sorry
 
-example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by sorry
+-- example (h : B ⊆ A ∪ A) : 1=1 := by
+--   setauto -- no goals to be solved
+
+
+
+
+-- other examples
+
+
+example (h : B ⊆ A ∪ A) : B ⊆ A := by setauto
+
+example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by setauto
 
 example (h1 : A = Aᶜ) : B = ∅ := by setauto
 
