@@ -57,7 +57,7 @@ macro "setauto" : tactic => `(tactic|(
   ];
   try intro x
   try specialize_all x
-  tauto
+  <;> tauto
 ))
 
 
@@ -76,8 +76,7 @@ example (h : B ⊆ A ∪ A) : 1=0 := by
 
 -- finishes early, tauto returns 'no goals to be solved'
 example (h : B ⊆ A ∪ A) : 1=1 := by
-  -- setauto -- not intended use, but works anyway; should raise error instead?
-  sorry
+  setauto -- simp closed the goal, tauto raises error
 
 
 
