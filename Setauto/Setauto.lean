@@ -154,7 +154,7 @@ macro "setauto" : tactic => `(tactic|(
     Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
     iff_not_self,
   ];
-  try intro_and_specialize;
+  -- here should add intro x and loop over all hypotheses to try to specialize them!
   try tauto
 ))
 
@@ -173,127 +173,89 @@ variable {α : Type} (A B C D E : Set α)
   try "specialize h x"
 -/
 
-example (h : B ⊆ A ∪ A) : B ⊆ A := by
-  try simp only [
-    ←Set.univ_subset_iff, ←Set.subset_empty_iff,
-    Set.union_empty, Set.inter_univ,
-    Set.compl_subset_iff_union, compl_compl,
-    -- Set.union_self,
-  ] at *;
-  -- now apply extensionality
-  try simp_all only [
-    Set.ext_iff, Set.subset_def,
-    Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
-    Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
-    iff_not_self,
-  ];
-  intro_and_specialize
-  try simp_all only [
-    Set.ext_iff, Set.subset_def,
-    Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
-    Set.mem_inter_iff, and_imp, not_true_eq_false, false_and, and_false,
-    iff_not_self,
-  ];
-  -- tauto gives error fail to prove termination
-  clear _example
-  -- tauto
+example (h : B ⊆ A ∪ A) : B ⊆ A := by sorry
+
+example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by sorry
+
+example (h1 : A = Aᶜ) : B = ∅ := by setauto
+
+example (h1 : A ⊆ Aᶜ \ B) : A = ∅ := by setauto
 
 
+example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
 
-example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by
-  intro_and_specialize
-  clear _example
-  tauto
-  -- tauto gives error fail to prove termination
-  simp_all
-  -- tauto
-  sorry
+example (h : E = Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A = E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
 
+example (h : E ⊇ Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A ⊆  E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
 
+example (h1 : A = B) : A = B := by setauto
 
+example (h1 : A = B) (h2 : B ⊆ C): A ⊆ C := by setauto
 
+example (h1 : A ⊆ B \ C) : A ⊆ B := by setauto
 
--- example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by setauto
+example (h1 : A ∩ B = Set.univ) : A = Set.univ := by setauto
 
--- example (h1 : A = Aᶜ) : B = ∅ := by setauto
+example (h1 : A ∪ B = ∅) : A = ∅ := by setauto
 
--- example (h1 : A ⊆ Aᶜ \ B) : A = ∅ := by setauto
+example (h1 : Aᶜ ⊆ ∅) : A = Set.univ := by setauto
 
+example (h1: Set.univ ⊆ Aᶜ) : A = ∅ := by setauto
 
--- example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
+example : A ∩ ∅ = ∅ := by setauto
 
--- example (h : E = Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A = E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
+example : A ∪ Set.univ = Set.univ := by setauto
 
--- example (h : E ⊇ Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) : D ∩ (B ∪ Cᶜ) ∩ A ⊆  E ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
+example : A ⊆ Set.univ := by setauto
 
--- example (h1 : A = B) : A = B := by setauto
+example (h1 : A ⊆ B) (h2: B ⊆ A) : A = B := by setauto
 
--- example (h1 : A = B) (h2 : B ⊆ C): A ⊆ C := by setauto
+example : A ∪ (B ∩ C) = (A ∪ B) ∩ (A ∪ C) := by setauto
 
--- example (h1 : A ⊆ B \ C) : A ⊆ B := by setauto
+example : A ∩ (B ∪ C) = (A ∩ B) ∪ (A ∩ C) := by setauto
 
--- example (h1 : A ∩ B = Set.univ) : A = Set.univ := by setauto
+example : A ⊆ (A ∪ B) ∪ C := by setauto
 
--- example (h1 : A ∪ B = ∅) : A = ∅ := by setauto
+example : A ∩ (B ∪ C) ⊆ (A ∩ B) ∪ (A ∩ C) := by setauto
 
--- example (h1 : Aᶜ ⊆ ∅) : A = Set.univ := by setauto
+example : A ∩ B ⊆ A := by setauto
 
--- example (h1: Set.univ ⊆ Aᶜ) : A = ∅ := by setauto
+example : A ⊆ A ∪ B := by setauto
 
--- example : A ∩ ∅ = ∅ := by setauto
+example (h1 : Set.univ ⊆ A) : A = Set.univ := by setauto
 
--- example : A ∪ Set.univ = Set.univ := by setauto
+example (h1 : B ⊆ A) (h2 : Set.univ ⊆ B): Set.univ = A := by setauto
 
--- example : A ⊆ Set.univ := by setauto
+example (h1 : A ⊆ B) (h2 : C ⊆ D) : C \ B ⊆ D \ A := by setauto
 
--- example (h1 : A ⊆ B) (h2: B ⊆ A) : A = B := by setauto
+example (h : A ⊆ B ∧ C ⊆ D) : C \ B ⊆ D \ A := by setauto
 
--- example : A ∪ (B ∩ C) = (A ∪ B) ∩ (A ∪ C) := by setauto
+example (h1 : Disjoint A B) (h2 : C ⊆ A) : Disjoint C (B \ D) := by setauto
 
--- example : A ∩ (B ∪ C) = (A ∩ B) ∪ (A ∩ C) := by setauto
+example : Aᶜᶜᶜ = Aᶜ := by setauto
 
--- example : A ⊆ (A ∪ B) ∪ C := by setauto
+example : A ⊆ Set.univ := by setauto
 
--- example : A ∩ (B ∪ C) ⊆ (A ∩ B) ∪ (A ∩ C) := by setauto
+example : ∅ ⊆ A := by setauto
 
--- example : A ∩ B ⊆ A := by setauto
+example (hA : A ⊆ ∅) : A = ∅ := by setauto
 
--- example : A ⊆ A ∪ B := by setauto
+example : Aᶜᶜ = A := by setauto
 
--- example (h1 : Set.univ ⊆ A) : A = Set.univ := by setauto
+example (hAB : A ⊆ B) (hBC : B ⊆ C) : A ⊆ C := by setauto
 
--- example (h1 : B ⊆ A) (h2 : Set.univ ⊆ B): Set.univ = A := by setauto
+example : (Aᶜ ∪ B ∪ C)ᶜ = Cᶜ ∩ Bᶜ ∩ A := by setauto
 
--- example (h1 : A ⊆ B) (h2 : C ⊆ D) : C \ B ⊆ D \ A := by setauto
+example : (Aᶜ ∩ B ∩ Cᶜᶜ)ᶜᶜᶜᶜᶜ = Cᶜ ∪ Bᶜ ∪ ∅ ∪ A ∪ ∅ := by setauto
 
--- example (h : A ⊆ B ∧ C ⊆ D) : C \ B ⊆ D \ A := by setauto
+example : D ∩ (B ∪ Cᶜ) ∩ A = (Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
 
--- example (h1 : Disjoint A B) (h2 : C ⊆ A) : Disjoint C (B \ D) := by setauto
+example (h1 : A ⊆ B) (h2 : B ⊆ C) (h3 : C ⊆ D) (h4 : D = E) (h5 : E ⊆ A) :
+  (Aᶜ ∩ B ∪ (C ∩ Bᶜ)ᶜ ∩ (Eᶜ ∪ A))ᶜ ∩ (B ∪ Eᶜᶜ)ᶜ =
+  (Dᶜ ∩ C ∪ (B ∩ Aᶜ)ᶜ ∩ (Eᶜ ∪ E))ᶜ ∩ (D ∪ Cᶜᶜ)ᶜ := by setauto
 
--- example : Aᶜᶜᶜ = Aᶜ := by setauto
+example (h1 : Set.univ ⊆ A) (h2 : A ⊆ ∅) :
+  (Aᶜ ∩ B ∩ Cᶜᶜ)ᶜᶜᶜ = (Aᶜ ∩ B ∪ (C ∩ Dᶜ)ᶜ ∩ (Eᶜ ∪ A))ᶜ ∩ (B ∪ Eᶜᶜ)ᶜ := by setauto
 
--- example : A ⊆ Set.univ := by setauto
-
--- example : ∅ ⊆ A := by setauto
-
--- example (hA : A ⊆ ∅) : A = ∅ := by setauto
-
--- example : Aᶜᶜ = A := by setauto
-
--- example (hAB : A ⊆ B) (hBC : B ⊆ C) : A ⊆ C := by setauto
-
--- example : (Aᶜ ∪ B ∪ C)ᶜ = Cᶜ ∩ Bᶜ ∩ A := by setauto
-
--- example : (Aᶜ ∩ B ∩ Cᶜᶜ)ᶜᶜᶜᶜᶜ = Cᶜ ∪ Bᶜ ∪ ∅ ∪ A ∪ ∅ := by setauto
-
--- example : D ∩ (B ∪ Cᶜ) ∩ A = (Aᶜᶜ ∩ Cᶜᶜᶜ ∩ D) ∪ (A ∩ Dᶜᶜ ∩ B)ᶜᶜ := by setauto
-
--- example (h1 : A ⊆ B) (h2 : B ⊆ C) (h3 : C ⊆ D) (h4 : D = E) (h5 : E ⊆ A) :
---   (Aᶜ ∩ B ∪ (C ∩ Bᶜ)ᶜ ∩ (Eᶜ ∪ A))ᶜ ∩ (B ∪ Eᶜᶜ)ᶜ =
---   (Dᶜ ∩ C ∪ (B ∩ Aᶜ)ᶜ ∩ (Eᶜ ∪ E))ᶜ ∩ (D ∪ Cᶜᶜ)ᶜ := by setauto
-
--- example (h1 : Set.univ ⊆ A) (h2 : A ⊆ ∅) :
---   (Aᶜ ∩ B ∩ Cᶜᶜ)ᶜᶜᶜ = (Aᶜ ∩ B ∪ (C ∩ Dᶜ)ᶜ ∩ (Eᶜ ∪ A))ᶜ ∩ (B ∪ Eᶜᶜ)ᶜ := by setauto
-
--- example (h1 : A ⊆ B) (h2 : A ⊆ C) (h3 : B ⊆ D) (h4 : C ⊆ D) (h5 : A = D) :
---   Bᶜ = Cᶜ := by setauto
+example (h1 : A ⊆ B) (h2 : A ⊆ C) (h3 : B ⊆ D) (h4 : C ⊆ D) (h5 : A = D) :
+  Bᶜ = Cᶜ := by setauto
