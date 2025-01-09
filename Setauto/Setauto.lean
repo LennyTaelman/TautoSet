@@ -47,8 +47,8 @@ example (h1 : ∀ x : ℕ , x = x) (h2 : 1 + 2 = 2)
   sorry
 
 
-
 macro "setauto" : tactic => `(tactic|(
+  focus
   simp_all only [
     Set.diff_eq, Set.disjoint_iff,
     Set.ext_iff, Set.subset_def,
