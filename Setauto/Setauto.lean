@@ -22,7 +22,6 @@ open Lean Elab.Tactic
   `specialize h x` for all hypotheses h where this tactic succeeds.
 -/
 
-
 syntax (name := specialize_all) "specialize_all" term : tactic
 
 @[tactic specialize_all] def evalSpecializeAll : Tactic :=
@@ -34,10 +33,19 @@ syntax (name := specialize_all) "specialize_all" term : tactic
     ctx.forM fun h: Lean.LocalDecl => do
       let s ← saveState
       try
+        -- run `specialize h x`
         evalTactic (← `(tactic|specialize $(mkIdent h.userName) $x))
       catch _ =>
         restoreState s
   | _ => throwError "unexpected input"
+
+-- test for specialize_all
+example (h1 : ∀ x : ℕ , x = x) (h2 : 1 + 2 = 2)
+    (h3 : ∀ x : ℕ , x = x + 1) : ∀ y : ℕ, 0 = 1 := by
+  intro y
+  specialize_all (y+3)
+  sorry
+
 
 
 macro "setauto" : tactic => `(tactic|(
@@ -49,10 +57,8 @@ macro "setauto" : tactic => `(tactic|(
   ];
   try intro x
   try specialize_all x
-  try tauto
+  tauto
 ))
-
-
 
 
 
@@ -63,19 +69,21 @@ macro "setauto" : tactic => `(tactic|(
 variable {α : Type} (A B C D E : Set α)
 
 
--- nonfinishing examples
-
+-- non-finishing example; raises error as desired
 example (h : B ⊆ A ∪ A) : 1=0 := by
-  setauto -- tauto failed to prove some goals; should backtrack local state?
+  -- setauto -- tauto failed to solve some goals
+  sorry
+
+-- finishes early, tauto returns 'no goals to be solved'
+example (h : B ⊆ A ∪ A) : 1=1 := by
+  -- setauto -- not intended use, but works anyway; should raise error instead?
   sorry
 
 
-example (h : B ⊆ A ∪ A) : 1=1 := by
-  setauto -- not intended use, but works anyway; should raise error?
 
 
--- other examples
 
+-- intended use examples
 
 example (h : B ∪ C ⊆ A ∪ A) : B ⊆ A := by setauto
 
