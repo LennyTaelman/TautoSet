@@ -21,14 +21,49 @@ import Lean.Elab.SyntheticMVars
   TODO: look at univ_subset_iff and subset_empty_iff; should these simp lemmas be reversed?
 -/
 
-open Lean Elab.Tactic Parser.Tactic Lean.Meta MVarId Batteries.Tactic Meta
+open Lean Elab.Tactic Parser.Tactic Lean.Meta MVarId Meta
 
 #check evalSpecialize
 
 
+-- the my_specialize tactic should attempt to specialize
+-- and do nothing if things don't typecheck
+
+syntax (name := my_specialize) "my_specialize" term term : tactic
+
+@[tactic my_specialize] def evalMySpecialize : Tactic :=
+    fun stx => withMainContext do
+  match stx with
+  | `(tactic| specialize $h:term $x:term) =>
+    dbg_trace f!"+ [my_specialize] h: {h}, x: {x}"
+    let h_expr ← elabTerm h none
+    let x_expr ← elabTerm x none
+    -- now apply h to x
+    let hx_expr := (mkApp h_expr x_expr)
+    dbg_trace f!"+ [my_specialize] hx_expr: {hx_expr}"
+    `(specialize $hx_expr)
+
+
+
+  | _ => throwError "unexpected input"
+
+
+example (h : ∀ x : ℕ , x = x) : ∀ y : ℕ , 1 = 0 := by
+  intro y
+  specialize h y
+
+
+
+
+
+  sorry
+
 syntax (name := specialize_all) "specialize_all " term : tactic
 
-def evalSpecialize : Tactic := fun stx => withMainContext do
+#check TSyntax `term
+
+@[tactic specialize_all] def evalSpecializeAll : Tactic :=
+    fun stx => withMainContext do
   match stx with
   | `(tactic| specialize_all $x:term) =>
     let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
@@ -38,9 +73,9 @@ def evalSpecialize : Tactic := fun stx => withMainContext do
         let n := decl.toExpr
         -- produce syntax for 'n applied to x'
         let e := Syntax.mkApp n.toSyntax #[x]
+        let (e, mvarIds') ← elabTermWithHoles e none `specialize (allowNaturalHoles := true)
       catch _ =>
         restoreState s
-        let (e, mvarIds') ← elabTermWithHoles e none `specialize (allowNaturalHoles := true)
         -- let h := e.getAppFn
         -- if h.isFVar then
         --   let localDecl ← h.fvarId!.getDecl
