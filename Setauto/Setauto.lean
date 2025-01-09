@@ -48,7 +48,7 @@ example (h1 : ∀ x : ℕ , x = x) (h2 : 1 + 2 = 2)
 
 
 macro "setauto" : tactic => `(tactic|(
-  focus
+  · (
   simp_all only [
     Set.diff_eq, Set.disjoint_iff,
     Set.ext_iff, Set.subset_def,
@@ -57,7 +57,7 @@ macro "setauto" : tactic => `(tactic|(
   ];
   try intro x
   try specialize_all x
-  <;> tauto
+  <;> tauto)
 ))
 
 
@@ -71,7 +71,7 @@ variable {α : Type} (A B C D E : Set α)
 
 -- non-finishing example; raises error as desired
 example (h : B ⊆ A ∪ A) : 1=0 := by
-  -- setauto -- tauto failed to solve some goals
+-- setauto -- tauto failed to solve some goals
   sorry
 
 -- finishes early, tauto returns 'no goals to be solved'
