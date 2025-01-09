@@ -41,7 +41,7 @@ syntax (name := specialize_all) "specialize_all" term : tactic
 
 
 macro "setauto" : tactic => `(tactic|(
-  try simp_all only [
+  simp_all only [
     Set.diff_eq, Set.disjoint_iff,
     Set.ext_iff, Set.subset_def,
     Set.mem_union, Set.mem_compl_iff, Set.mem_empty_iff_false,
@@ -49,8 +49,10 @@ macro "setauto" : tactic => `(tactic|(
   ];
   try intro x
   try specialize_all x
-  tauto
+  try tauto
 ))
+
+
 
 
 
@@ -63,27 +65,27 @@ variable {α : Type} (A B C D E : Set α)
 
 -- nonfinishing examples
 
--- example (h : B ⊆ A ∪ A) : 1=0 := by
---   setauto -- tauto failed to prove some goals
+example (h : B ⊆ A ∪ A) : 1=0 := by
+  setauto -- tauto failed to prove some goals; should backtrack local state?
+  sorry
 
 
--- example (h : B ⊆ A ∪ A) : 1=1 := by
---   setauto -- no goals to be solved
-
-
+example (h : B ⊆ A ∪ A) : 1=1 := by
+  setauto -- not intended use, but works anyway; should raise error?
 
 
 -- other examples
 
 
-example (h : B ⊆ A ∪ A) : B ⊆ A := by setauto
+example (h : B ∪ C ⊆ A ∪ A) : B ⊆ A := by setauto
+
+example (h: B ∩ B ∩ C ⊇ A) : A ⊆ B := by setauto
 
 example (h1 : A ⊆ B ∪ C) (h2 : C ⊆ D): A ⊆ B ∪ D := by setauto
 
 example (h1 : A = Aᶜ) : B = ∅ := by setauto
 
 example (h1 : A ⊆ Aᶜ \ B) : A = ∅ := by setauto
-
 
 example (h : A ∩ B ⊆ C) (h2 : C ∩ D ⊆ E) : A ∩ B ∩ D ⊆ E := by setauto
 
