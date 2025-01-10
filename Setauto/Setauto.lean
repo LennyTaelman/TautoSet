@@ -26,22 +26,9 @@ open Lean Elab.Tactic
   `specialize h x` for all hypotheses `h` where this tactic succeeds.
 -/
 
-syntax (name := specialize_all) "specialize_all" term : tactic
-
-@[tactic specialize_all] def evalSpecializeAll : Tactic :=
-    fun stx => withMainContext do
-  match stx with
-  | `(tactic| specialize_all $x:term) =>
-    -- loop over all hypotheses h
-    let ctx ← Lean.MonadLCtx.getLCtx
-    ctx.forM fun h: Lean.LocalDecl => do
-      let s ← saveState
-      try
-        -- run `specialize h x`
-        evalTactic (← `(tactic|specialize $(mkIdent h.userName) $x))
-      catch _ =>
-        restoreState s
-  | _ => throwError "unexpected input"
+elab (name := specialize_all) "specialize_all" x:term : tactic => withMainContext do
+  for h in ← getLCtx do
+    evalTactic (← `(tactic|specialize $(mkIdent h.userName) $x)) <|> pure ()
 
 
 macro "tauto_set" : tactic => `(tactic|
@@ -56,11 +43,10 @@ macro "tauto_set" : tactic => `(tactic|
 )
 
 
+-- test examples
+
 variable {α : Type} (A B C D E : Set α)
 
-
-
--- test examples
 
 example (h : B ∪ C ⊆ A ∪ A) : B ⊆ A := by tauto_set
 
