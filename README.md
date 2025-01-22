@@ -4,4 +4,4 @@ It should be able to prove any tautology involving hypotheses and goals of the f
 X ⊆ Y or X = Y, where X, Y are expressions built from finitely many variables of type
 Set α using intersections, unions, set-theoretic differences and complements.
 
-This is now a mathlib pull request: https://github.com/leanprover-community/mathlib4/pull/20706
+This has now been merged into mathlib: https://github.com/leanprover-community/mathlib4/pull/20706
